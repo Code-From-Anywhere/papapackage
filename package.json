@@ -2,9 +2,10 @@
   "name": "papapackage",
   "version": "1.0.0",
   "description": "",
-  "main": "cli.js",
+  "main": "build/cli.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/index.ts",
+    "package": "pkg . --targets node14-macos-x64 --output hello"
   },
   "repository": {
     "type": "git",
@@ -15,5 +16,23 @@
   "bugs": {
     "url": "https://github.com/Code-From-Anywhere/papapackage/issues"
   },
-  "homepage": "https://github.com/Code-From-Anywhere/papapackage#readme"
+  "homepage": "https://github.com/Code-From-Anywhere/papapackage#readme",
+  "devDependencies": {
+    "@types/node": "^16.11.12",
+    "@types/yargs": "^17.0.7",
+    "babel-cli": "^6.26.0",
+    "nodemon": "^2.0.15",
+    "pkg": "^5.5.1",
+    "ts-node": "^10.4.0",
+    "typescript": "^4.5.3"
+  },
+  "dependencies": {
+    "yargs": "^17.3.0"
+  },
+  "bin": {
+    "hello": "./build/cli.js"
+  },
+  "pkg": {
+    "scripts": "build/**/*.js"
+  }
 }
