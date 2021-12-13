@@ -1,0 +1,19 @@
+{
+  "name": "papapackage",
+  "version": "1.0.0",
+  "description": "",
+  "main": "cli.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Code-From-Anywhere/papapackage.git"
+  },
+  "author": "Wijnand Karsens",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Code-From-Anywhere/papapackage/issues"
+  },
+  "homepage": "https://github.com/Code-From-Anywhere/papapackage#readme"
+}
