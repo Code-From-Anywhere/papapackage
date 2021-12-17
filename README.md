@@ -1,4 +1,6 @@
-<img align="left" src="./papapackage.png">
+<img align="left" src="./logo.png">
+
+# Papapackage
 
 This cli watches all your projects and copies changed files to all node_modules folders of dependencies.
 
