@@ -1,4 +1,4 @@
-<img align="left" src="./logo.png">
+<img align="left" src="./logo.png"/>
 
 # Papapackage
 
