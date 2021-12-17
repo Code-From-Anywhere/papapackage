@@ -1,6 +1,6 @@
 {
   "name": "papapackage",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "build/cli.js",
   "scripts": {
@@ -33,7 +33,7 @@
     "yargs": "^17.3.0"
   },
   "bin": {
-    "hello": "./build/cli.js"
+    "papapackage": "./build/cli.js"
   },
   "pkg": {
     "scripts": "build/**/*.js"
