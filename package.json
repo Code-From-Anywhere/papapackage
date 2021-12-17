@@ -1,11 +1,11 @@
 {
   "name": "papapackage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "build/cli.js",
   "scripts": {
     "dev": "tsc -w",
-    "package": "pkg . --targets node14-macos-x64 --output hello"
+    "pub": "npm version patch --force && npm publish"
   },
   "repository": {
     "type": "git",
@@ -28,6 +28,7 @@
     "typescript": "^4.5.3"
   },
   "dependencies": {
+    "colors": "^1.4.0",
     "fb-watchman": "^2.0.1",
     "yargs": "^17.3.0"
   },
