@@ -1,7 +1,11 @@
 import fs from "fs";
 import path from "path";
-import type { Package, WatchmanDest } from "./types";
+import { Arguments } from "yargs";
+import type { Package, WatchmanDest, Watch } from "./types";
 
+/**
+ * searches for a match (file) in a base dir, but ignores folders in {ignore}
+ */
 export function searchRecursiveSync(
   dir: string,
   ignore: string[],
@@ -41,7 +45,7 @@ export const findPackageDependencyPair =
 export const getRelevantWatchlistInfo = (object: {
   src: Package;
   dests: Package[];
-}) => {
+}): Watch => {
   const dests = object.dests.map((dest) => getFolder(dest.path));
   const name = object.src.name!;
   const version = object.src.version;
@@ -69,6 +73,93 @@ export const getRelevantWatchlistInfo = (object: {
       })),
   };
 }; //kjlkjkljkl
+
+export const calculateWatchlist = (argv: Arguments) => {
+  const command = argv.$0;
+  const args = argv._;
+  const debug = args[1];
+  //step 1: get the folder to run this command from
+  const folder = chooseFolder(args);
+
+  //step 2: recursively search all directories except for certain ignored directories for package.json files
+  const ignore = ["node_modules", ".git"];
+  const match = "package.json";
+  const files = searchRecursiveSync(folder, ignore, match);
+
+  //step 3: now that we got all package.json's, fetch their data
+  const packages = files
+    .map(getRelevantPackageInfo)
+    .filter(Boolean) as Package[];
+
+  //step 4: get all dependencies of all packages
+  const depList = packages.reduce(getDependenciesList, []);
+  const allDependencies = unique(depList, String);
+
+  //step 5: search for packages that are included in all dependencies and only keep their highest version
+  const dependencyPackages = packages.filter(
+    (p) => p.name && allDependencies.includes(p.name)
+  );
+  if (debug) {
+    console.log({ files, packagesLength: packages.length });
+
+    //console.dir(allDependencies, { maxArrayLength: null });
+    console.log(dependencyPackages.map((p) => p.name));
+  }
+
+  //step 6: find dependencies for all packages
+  const dependencyPackagesNames = dependencyPackages.map((p) => p.name);
+  const dependentPackages = packages
+    .map(findPackageDependencyPair(dependencyPackagesNames))
+    .filter((res) => res.dependencies.length > 0);
+
+  //step 7: find srcDestPairs
+  const srcDestPairs = dependentPackages
+    .map((dp) => {
+      const dest = dp.package;
+      const watchlistPartly = dp.dependencies.map((dependency) => ({
+        src: dependencyPackages.find((p) => p.name === dependency)!,
+        //.reduce(keepHighestVersion, [])[0],
+        dest,
+      }));
+      return watchlistPartly;
+    })
+    .reduce((previous, current) => {
+      return [...previous, ...current];
+    }, []);
+
+  //step 8: find all dests for one src, for all unique src's
+  const srcDestsPairs = unique(
+    srcDestPairs,
+    (srcDestPair) => srcDestPair.src.path
+  ).map(({ src }) => {
+    return {
+      src,
+      dests: srcDestPairs
+        .filter((srcDest) => srcDest.src.name === src.name)
+        .map((srcDest) => srcDest.dest),
+    };
+  });
+
+  //step 9: we just need the folders
+  const watchlist: Watch[] = srcDestsPairs.map(getRelevantWatchlistInfo);
+
+  //TODO: add step 10-12 later, as it's probably not needed
+  //step 10: safe last time papapackage was running and check the last time every dependency has had changes in non-ignored folders
+  //step 11: remove current dest/node_modules/dependency folder
+  //step 12: copy src folder to dest/node_modules/dependency
+
+  return watchlist;
+};
+
+export const logWatchlist = (watchlist: Watch[]) => {
+  console.dir(
+    watchlist.map((w) => ({
+      src: w.src,
+      dests: w.dests.map((dest) => dest.destinationFolder),
+    })),
+    { depth: 10 }
+  );
+};
 
 const onlyCopyIfCurrentVersionIsLower =
   (version: string | undefined) => (object: WatchmanDest) => {

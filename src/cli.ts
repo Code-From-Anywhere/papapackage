@@ -2,7 +2,7 @@
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { handler as defaultHandler } from "./commands/*";
+import { handler as defaultHandler } from "./commands/DEFAULT";
 yargs(hideBin(process.argv))
   .scriptName("papapackage")
   .commandDir("commands")

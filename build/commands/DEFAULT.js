@@ -174,7 +174,7 @@ const createSubscriptionEventEmitter = (client, watchlist) => {
                     //   to,
                     //   toExists: fs.existsSync(to),
                     // });
-                    //fs.copyFileSync(from, to);
+                    fs_1.default.copyFileSync(from, to);
                     //console.log({ from, to });
                 });
             });

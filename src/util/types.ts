@@ -20,3 +20,20 @@ export type WatchmanDest = {
   currentVersion?: string;
   destinationFolder: string;
 };
+
+export type Watch = {
+  src: string;
+  dests: {
+    destinationFolder: string;
+    dependencyName: string;
+  }[];
+};
+
+export type FileType = {
+  // ["name", "size", "mtime_ms", "exists", "type"]
+  name: string;
+  size: number;
+  mtime_ms: number;
+  exists: boolean;
+  type: string;
+};
