@@ -37,7 +37,7 @@ export const handler = (argv: Arguments): void => {
 
   //step 13: run watchman for the watchlist with the handler to copy every changed file to all its destination
   const client = new watchman.Client({
-    watchmanBinaryPath: "/opt/homebrew/bin/watchman",
+    //watchmanBinaryPath: "/opt/homebrew/bin/watchman",
   });
 
   client.capabilityCheck(

@@ -4,9 +4,11 @@
 
 # Papapackage
 
-This cli watches all your projects and copies changed files to all node_modules folders of dependencies.
+This cli watches all your projects and copies changed files to all node_modules folders of dependent projects.
 
 # Installation
+
+`brew install watchman`
 
 `yarn global add papapackage`
 

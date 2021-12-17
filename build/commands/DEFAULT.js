@@ -31,7 +31,7 @@ const handler = (argv) => {
     const watchlist = (0, util_1.calculateWatchlist)(argv);
     //step 13: run watchman for the watchlist with the handler to copy every changed file to all its destination
     const client = new fb_watchman_1.default.Client({
-        watchmanBinaryPath: "/opt/homebrew/bin/watchman",
+    //watchmanBinaryPath: "/opt/homebrew/bin/watchman",
     });
     client.capabilityCheck({ optional: [], required: ["relative_root"] }, function (error, resp) {
         if (error) {
