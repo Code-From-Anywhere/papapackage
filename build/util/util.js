@@ -3,9 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFolder = exports.getDependenciesList = exports.unique = exports.chooseFolder = exports.keepHighestVersion = exports.isHigherVersion = exports.getRelevantPackageInfo = exports.logWatchlist = exports.calculateWatchlist = exports.getRelevantWatchlistInfo = exports.findPackageDependencyPair = exports.searchRecursiveSync = void 0;
+exports.getFolder = exports.getDependenciesList = exports.unique = exports.chooseFolder = exports.keepHighestVersion = exports.isHigherVersion = exports.getRelevantPackageInfo = exports.logWatchlist = exports.calculateWatchlist = exports.getPackages = exports.getRelevantWatchlistInfo = exports.findPackageDependencyPair = exports.searchRecursiveSync = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const constants_1 = require("./constants");
 /**
  * searches for a match (file) in a base dir, but ignores folders in {ignore}
  */
@@ -56,7 +57,7 @@ const getRelevantWatchlistInfo = (object) => {
             currentVersion: p.currentPackageInfo?.version,
             destinationFolder: p.dest,
         }))
-            .filter(onlyCopyIfCurrentVersionIsLower(version))
+            //.filter(onlyCopyIfCurrentVersionIsLower(version)) //TODO: This creates a bug!
             .map((watchmanDest) => ({
             destinationFolder: watchmanDest.destinationFolder,
             dependencyName: name,
@@ -64,27 +65,32 @@ const getRelevantWatchlistInfo = (object) => {
     };
 }; //kjlkjkljkl
 exports.getRelevantWatchlistInfo = getRelevantWatchlistInfo;
-const calculateWatchlist = (argv) => {
-    const command = argv.$0;
-    const args = argv._;
-    const debug = args[1];
+const getPackages = (args) => {
     //step 1: get the folder to run this command from
     const folder = (0, exports.chooseFolder)(args);
     //step 2: recursively search all directories except for certain ignored directories for package.json files
-    const ignore = ["node_modules", ".git"];
-    const match = "package.json";
-    const files = searchRecursiveSync(folder, ignore, match);
+    const files = searchRecursiveSync(folder, constants_1.IGNORE_DIRS, constants_1.MATCH_FILE);
     //step 3: now that we got all package.json's, fetch their data
     const packages = files
         .map(exports.getRelevantPackageInfo)
         .filter(Boolean);
+    return { files, packages };
+};
+exports.getPackages = getPackages;
+const calculateWatchlist = (argv) => {
+    const command = argv.$0;
+    const args = argv._;
+    const debug = args[1];
+    console.log({ command, debug });
+    //step 1-3
+    const { files, packages } = (0, exports.getPackages)(args);
     //step 4: get all dependencies of all packages
     const depList = packages.reduce(exports.getDependenciesList, []);
     const allDependencies = unique(depList, String);
     //step 5: search for packages that are included in all dependencies and only keep their highest version
     const dependencyPackages = packages.filter((p) => p.name && allDependencies.includes(p.name));
     if (debug) {
-        console.log({ files, packagesLength: packages.length });
+        console.log({ files });
         //console.dir(allDependencies, { maxArrayLength: null });
         console.log(dependencyPackages.map((p) => p.name));
     }
@@ -107,15 +113,30 @@ const calculateWatchlist = (argv) => {
         .reduce((previous, current) => {
         return [...previous, ...current];
     }, []);
+    const uniqueSources = unique(srcDestPairs, (srcDestPair) => srcDestPair.src.path).map((sd) => sd.src);
     //step 8: find all dests for one src, for all unique src's
-    const srcDestsPairs = unique(srcDestPairs, (srcDestPair) => srcDestPair.src.path).map(({ src }) => {
+    const srcDestsPairs = uniqueSources.map((src) => {
+        const dests = srcDestPairs
+            .filter((srcDest) => srcDest.src.name === src.name)
+            .map((srcDest) => srcDest.dest);
         return {
             src,
-            dests: srcDestPairs
-                .filter((srcDest) => srcDest.src.name === src.name)
-                .map((srcDest) => srcDest.dest),
+            dests,
         };
     });
+    if (debug) {
+        console.log("SRCDEST & SRCDESTS");
+        console.dir({
+            srcDestPairs: srcDestPairs.map((sd) => ({
+                src: sd.src.path,
+                dest: sd.dest.path,
+            })),
+            srcDestsPairs: srcDestsPairs.map((sd) => ({
+                src: sd.src.path,
+                dests: sd.dests.map((d) => d.path),
+            })),
+        }, { depth: 999 });
+    }
     //step 9: we just need the folders
     const watchlist = srcDestsPairs.map(exports.getRelevantWatchlistInfo);
     //TODO: add step 10-12 later, as it's probably not needed

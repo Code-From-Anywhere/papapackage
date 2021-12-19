@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Arguments } from "yargs";
+import { IGNORE_DIRS, MATCH_FILE } from "./constants";
 import type { Package, WatchmanDest, Watch } from "./types";
 
 /**
@@ -66,7 +67,7 @@ export const getRelevantWatchlistInfo = (object: {
         currentVersion: p.currentPackageInfo?.version,
         destinationFolder: p.dest,
       }))
-      .filter(onlyCopyIfCurrentVersionIsLower(version))
+      //.filter(onlyCopyIfCurrentVersionIsLower(version)) //TODO: This creates a bug!
       .map((watchmanDest) => ({
         destinationFolder: watchmanDest.destinationFolder,
         dependencyName: name,
@@ -74,22 +75,29 @@ export const getRelevantWatchlistInfo = (object: {
   };
 }; //kjlkjkljkl
 
-export const calculateWatchlist = (argv: Arguments) => {
-  const command = argv.$0;
-  const args = argv._;
-  const debug = args[1];
+export const getPackages = (args: (string | number)[]) => {
   //step 1: get the folder to run this command from
   const folder = chooseFolder(args);
 
   //step 2: recursively search all directories except for certain ignored directories for package.json files
-  const ignore = ["node_modules", ".git"];
-  const match = "package.json";
-  const files = searchRecursiveSync(folder, ignore, match);
+  const files = searchRecursiveSync(folder, IGNORE_DIRS, MATCH_FILE);
 
   //step 3: now that we got all package.json's, fetch their data
   const packages = files
     .map(getRelevantPackageInfo)
     .filter(Boolean) as Package[];
+
+  return { files, packages };
+};
+
+export const calculateWatchlist = (argv: Arguments) => {
+  const command = argv.$0;
+  const args = argv._;
+  const debug = args[1];
+
+  console.log({ command, debug });
+  //step 1-3
+  const { files, packages } = getPackages(args);
 
   //step 4: get all dependencies of all packages
   const depList = packages.reduce(getDependenciesList, []);
@@ -99,9 +107,9 @@ export const calculateWatchlist = (argv: Arguments) => {
   const dependencyPackages = packages.filter(
     (p) => p.name && allDependencies.includes(p.name)
   );
-  if (debug) {
-    console.log({ files, packagesLength: packages.length });
 
+  if (debug) {
+    console.log({ files });
     //console.dir(allDependencies, { maxArrayLength: null });
     console.log(dependencyPackages.map((p) => p.name));
   }
@@ -127,18 +135,40 @@ export const calculateWatchlist = (argv: Arguments) => {
       return [...previous, ...current];
     }, []);
 
-  //step 8: find all dests for one src, for all unique src's
-  const srcDestsPairs = unique(
+  const uniqueSources = unique(
     srcDestPairs,
     (srcDestPair) => srcDestPair.src.path
-  ).map(({ src }) => {
+  ).map((sd) => sd.src);
+
+  //step 8: find all dests for one src, for all unique src's
+  const srcDestsPairs = uniqueSources.map((src) => {
+    const dests = srcDestPairs
+      .filter((srcDest) => srcDest.src.name === src.name)
+      .map((srcDest) => srcDest.dest);
+
     return {
       src,
-      dests: srcDestPairs
-        .filter((srcDest) => srcDest.src.name === src.name)
-        .map((srcDest) => srcDest.dest),
+      dests,
     };
   });
+
+  if (debug) {
+    console.log("SRCDEST & SRCDESTS");
+    console.dir(
+      {
+        srcDestPairs: srcDestPairs.map((sd) => ({
+          src: sd.src.path,
+          dest: sd.dest.path,
+        })),
+
+        srcDestsPairs: srcDestsPairs.map((sd) => ({
+          src: sd.src.path,
+          dests: sd.dests.map((d) => d.path),
+        })),
+      },
+      { depth: 999 }
+    );
+  }
 
   //step 9: we just need the folders
   const watchlist: Watch[] = srcDestsPairs.map(getRelevantWatchlistInfo);

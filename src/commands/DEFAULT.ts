@@ -11,6 +11,7 @@ import path from "path";
 import {
   // keepHighestVersion,
   calculateWatchlist,
+  getPackages,
   logWatchlist,
 } from "../util/util";
 
@@ -24,6 +25,13 @@ export const handler = (argv: Arguments): void => {
     } else if (key.name === "l") {
       const watchlist = calculateWatchlist(argv);
       logWatchlist(watchlist);
+    } else if (key.name === "f") {
+      const args = argv._;
+      const { files, packages } = getPackages(args);
+      console.log({
+        files,
+        packages: packages.map(({ name, path }) => ({ name, path })),
+      });
     } else {
       console.log(
         `You pressed the "${str}" key, but nothing will happen.`,
@@ -88,7 +96,7 @@ export const handler = (argv: Arguments): void => {
               : resp.watch
           );
 
-          return make_subscription(
+          return makeSubscription(
             client,
             resp.watch,
             resp.relative_path,
@@ -106,7 +114,7 @@ export const handler = (argv: Arguments): void => {
 // `watch` is obtained from `resp.watch` in the `watch-project` response.
 // `relative_path` is obtained from `resp.relative_path` in the
 // `watch-project` response.
-function make_subscription(
+function makeSubscription(
   client: watchman.Client,
   watch: string,
   relative_path: string,
@@ -187,9 +195,13 @@ const createSubscriptionEventEmitter = (
   watchlist: Watch[]
 ) => {
   client.on("subscription", function (resp) {
+    //console.log("subscription...", resp);
     const [appName, rootPath, relativePath] = resp.subscription.split(":");
 
-    if (!rootPath) return;
+    if (!rootPath) {
+      console.log("No rootpath found", resp.subscription);
+      return;
+    }
 
     const fullPath = relativePath
       ? path.join(rootPath, relativePath)
@@ -207,10 +219,15 @@ const createSubscriptionEventEmitter = (
       );
 
       console.log(
-        colors.green("Subscribed"),
+        colors.green("Event"),
         `Copying ${filteredFiles.length} file(s) to ${watch.dests.length} destination(s)`,
+        { fullPath },
+        colors.yellow("names: "),
         filteredFiles.map((f: FileType) => f.name),
-        watch.dests.map((d) => d.destinationFolder)
+        colors.blue("destinations: "),
+        watch.dests.map((d) =>
+          path.join(d.destinationFolder, "node_modules", d.dependencyName)
+        )
       );
 
       filteredFiles.forEach(function (file: FileType) {
@@ -262,6 +279,8 @@ const createSubscriptionEventEmitter = (
           //console.log({ from, to });
         });
       });
+    } else {
+      console.log("Couldnt find watch for ", resp.subscription);
     }
   });
 };
