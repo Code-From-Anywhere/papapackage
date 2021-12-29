@@ -1,9 +1,44 @@
-import fs from "fs";
+import fs, { link } from "fs";
 import path from "path";
 import { Arguments } from "yargs";
 import { IGNORE_DIRS, MATCH_FILE } from "./constants";
-import type { Package, WatchmanDest, Watch } from "./types";
+import type {
+  Package,
+  WatchmanDest,
+  Watch,
+  ProjectType,
+  LinkingStrategy,
+  Link,
+  SrcDestsPackagePair,
+  Todo,
+  LinkingCli,
+} from "./types";
+import { exec, execSync } from "child_process";
 
+export const hasDependency = (packageJson: Package, dependency: string) => {
+  return (
+    packageJson.dependencies &&
+    Object.keys(packageJson.dependencies).includes(dependency)
+  );
+};
+
+export const getProjectType = (packageJson: any): ProjectType => {
+  const hasNext = hasDependency(packageJson, "next");
+  const hasExpo = hasDependency(packageJson, "expo");
+  const hasReactNative = hasDependency(packageJson, "react-native");
+  const hasReact = hasDependency(packageJson, "react");
+  const hasExpress = hasDependency(packageJson, "express");
+
+  return hasNext
+    ? "next"
+    : hasExpo || hasReactNative
+    ? "react-native"
+    : hasReact
+    ? "react"
+    : hasExpress
+    ? "express"
+    : "unknown";
+};
 /**
  * searches for a match (file) in a base dir, but ignores folders in {ignore}
  */
@@ -43,10 +78,15 @@ export const findPackageDependencyPair =
     };
   };
 
-export const getRelevantWatchlistInfo = (object: {
-  src: Package;
-  dests: Package[];
-}): Watch => {
+export const getLinkingStrategy = (type?: ProjectType): LinkingStrategy => {
+  const linkTypes: ProjectType[] = ["next", "react"];
+
+  return type && linkTypes.includes(type) ? "link" : "copy";
+};
+
+export const getRelevantWatchlistInfo = (
+  object: SrcDestsPackagePair
+): Watch => {
   const dests = object.dests.map((dest) => getFolder(dest.path));
   const name = object.src.name!;
   const version = object.src.version;
@@ -62,6 +102,7 @@ export const getRelevantWatchlistInfo = (object: {
   return {
     src: getFolder(object.src.path),
     dests: destPackages
+      .filter((x) => getLinkingStrategy(x.currentPackageInfo?.type) === "copy")
       .map((p) => ({
         currentPackageJsonPath: p.currentPackageInfo?.path,
         currentVersion: p.currentPackageInfo?.version,
@@ -90,7 +131,7 @@ export const getPackages = (args: (string | number)[]) => {
   return { files, packages };
 };
 
-export const calculateWatchlist = (argv: Arguments) => {
+export const getSrcDestsPairs = (argv: Arguments) => {
   const command = argv.$0;
   const args = argv._;
   const debug = args[1];
@@ -141,7 +182,7 @@ export const calculateWatchlist = (argv: Arguments) => {
   ).map((sd) => sd.src);
 
   //step 8: find all dests for one src, for all unique src's
-  const srcDestsPairs = uniqueSources.map((src) => {
+  const srcDestsPairs: SrcDestsPackagePair[] = uniqueSources.map((src) => {
     const dests = srcDestPairs
       .filter((srcDest) => srcDest.src.name === src.name)
       .map((srcDest) => srcDest.dest);
@@ -170,15 +211,68 @@ export const calculateWatchlist = (argv: Arguments) => {
     );
   }
 
+  return srcDestsPairs;
+};
+
+export const getRelevantLinkingInfo = (
+  packagePair: SrcDestsPackagePair
+): Link | null => {
+  const dependencyName = packagePair.src.name;
+  return dependencyName
+    ? {
+        src: getFolder(packagePair.src.path),
+        dests: packagePair.dests
+          .filter((dest) => getLinkingStrategy(dest.type) === "link")
+          .map((dest) => ({
+            destinationFolder: getFolder(dest.path),
+            dependencyName,
+          })),
+      }
+    : null;
+};
+
+export function notEmpty<TValue>(
+  value: TValue | null | undefined
+): value is TValue {
+  return value !== null && value !== undefined;
+}
+
+export const calculateTodo = (argv: Arguments): Todo => {
+  const srcDestsPairs = getSrcDestsPairs(argv);
+
   //step 9: we just need the folders
-  const watchlist: Watch[] = srcDestsPairs.map(getRelevantWatchlistInfo);
+  const watchlist: Watch[] = srcDestsPairs
+    .map(getRelevantWatchlistInfo)
+    .filter((x) => x.dests.length !== 0);
+  const linklist: Link[] = srcDestsPairs
+    .map(getRelevantLinkingInfo)
+    .filter(notEmpty)
+    .filter((x) => x.dests.length !== 0);
 
   //TODO: add step 10-12 later, as it's probably not needed
   //step 10: safe last time papapackage was running and check the last time every dependency has had changes in non-ignored folders
   //step 11: remove current dest/node_modules/dependency folder
   //step 12: copy src folder to dest/node_modules/dependency
 
-  return watchlist;
+  return { watchlist, linklist };
+};
+
+export const linkLinklist = (linklist: Link[], cli: LinkingCli): void => {
+  const commands = linklist.reduce((commands, link) => {
+    return [
+      ...commands,
+      `cd ${link.src} && ${cli} link`,
+      ...link.dests.map(
+        (dest) =>
+          `cd ${dest.destinationFolder} && ${cli} link ${dest.dependencyName}`
+      ),
+    ];
+  }, [] as string[]);
+
+  commands.forEach((command) => {
+    const result = execSync(command);
+    console.log({ result: result.toString("utf-8") });
+  });
 };
 
 export const logWatchlist = (watchlist: Watch[]) => {
@@ -186,6 +280,16 @@ export const logWatchlist = (watchlist: Watch[]) => {
     watchlist.map((w) => ({
       src: w.src,
       dests: w.dests.map((dest) => dest.destinationFolder),
+    })),
+    { depth: 10 }
+  );
+};
+
+export const logLinklist = (linklist: Link[]) => {
+  console.dir(
+    linklist.map((l) => ({
+      src: l.src,
+      dests: l.dests,
     })),
     { depth: 10 }
   );
@@ -218,6 +322,7 @@ export const getRelevantPackageInfo = (path: string): Package | null => {
         dependencies: json.dependencies,
         devDependencies: json.devDependencies,
         peerDependencies: json.peerDependencies,
+        type: getProjectType(json),
       }
     : null;
 };

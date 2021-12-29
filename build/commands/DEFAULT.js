@@ -13,6 +13,8 @@ const path_1 = __importDefault(require("path"));
 const util_1 = require("../util/util");
 const handler = (argv) => {
     //watch certain keys:
+    const args = argv._;
+    const debug = args[1];
     readline.emitKeypressEvents(process.stdin);
     process.stdin.setRawMode(true);
     process.stdin.on("keypress", (str, key) => {
@@ -20,8 +22,10 @@ const handler = (argv) => {
             process.exit();
         }
         else if (key.name === "l") {
-            const watchlist = (0, util_1.calculateWatchlist)(argv);
-            (0, util_1.logWatchlist)(watchlist);
+            const { watchlist, linklist } = (0, util_1.calculateTodo)(argv);
+            //logWatchlist(watchlist);
+            (0, util_1.logLinklist)(linklist);
+            (0, util_1.linkLinklist)(linklist, "yarn");
         }
         else if (key.name === "f") {
             const args = argv._;
@@ -36,7 +40,8 @@ const handler = (argv) => {
         }
     });
     //step 1-12
-    const watchlist = (0, util_1.calculateWatchlist)(argv);
+    const { watchlist, linklist } = (0, util_1.calculateTodo)(argv);
+    (0, util_1.linkLinklist)(linklist, "yarn");
     //step 13: run watchman for the watchlist with the handler to copy every changed file to all its destination
     const client = new fb_watchman_1.default.Client({
     //watchmanBinaryPath: "/opt/homebrew/bin/watchman",
@@ -77,7 +82,7 @@ const handler = (argv) => {
                 return makeSubscription(client, resp.watch, resp.relative_path, watch.dests);
             });
         });
-        createSubscriptionEventEmitter(client, watchlist);
+        createSubscriptionEventEmitter(client, watchlist, debug);
     });
     //process.exit(0);
 };
@@ -133,7 +138,7 @@ const createWatchmanConfig = (watch) => {
         fs_1.default.writeFileSync(watchmanConfigPath, JSON.stringify({ ignore_dirs: ["node_modules", ".git"] }));
     }
 };
-const createSubscriptionEventEmitter = (client, watchlist) => {
+const createSubscriptionEventEmitter = (client, watchlist, debug) => {
     client.on("subscription", function (resp) {
         //console.log("subscription...", resp);
         const [appName, rootPath, relativePath] = resp.subscription.split(":");
@@ -179,13 +184,18 @@ const createSubscriptionEventEmitter = (client, watchlist) => {
                             recursive: true,
                         });
                     }
-                    // console.log({
-                    //   from,
-                    //   fromExists: fs.existsSync(from),
-                    //   to,
-                    //   toExists: fs.existsSync(to),
-                    // });
-                    fs_1.default.copyFileSync(from, to);
+                    try {
+                        fs_1.default.copyFileSync(from, to, fs_1.default.constants.COPYFILE_FICLONE);
+                    }
+                    catch (error) {
+                        console.log(colors.red("copy file error"), {
+                            from,
+                            fromExists: fs_1.default.existsSync(from),
+                            to,
+                            toExists: fs_1.default.existsSync(to),
+                            error,
+                        });
+                    }
                     //console.log({ from, to });
                 });
             });

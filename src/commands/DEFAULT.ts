@@ -10,21 +10,28 @@ import fs from "fs";
 import path from "path";
 import {
   // keepHighestVersion,
-  calculateWatchlist,
+  calculateTodo,
   getPackages,
+  linkLinklist,
+  logLinklist,
   logWatchlist,
 } from "../util/util";
 
 export const handler = (argv: Arguments): void => {
   //watch certain keys:
+  const args = argv._;
+  const debug = args[1];
+
   readline.emitKeypressEvents(process.stdin);
   process.stdin.setRawMode(true);
   process.stdin.on("keypress", (str, key) => {
     if (key.ctrl && key.name === "c") {
       process.exit();
     } else if (key.name === "l") {
-      const watchlist = calculateWatchlist(argv);
-      logWatchlist(watchlist);
+      const { watchlist, linklist } = calculateTodo(argv);
+      //logWatchlist(watchlist);
+      logLinklist(linklist);
+      linkLinklist(linklist, "yarn");
     } else if (key.name === "f") {
       const args = argv._;
       const { files, packages } = getPackages(args);
@@ -41,7 +48,9 @@ export const handler = (argv: Arguments): void => {
   });
 
   //step 1-12
-  const watchlist = calculateWatchlist(argv);
+  const { watchlist, linklist } = calculateTodo(argv);
+
+  linkLinklist(linklist, "yarn");
 
   //step 13: run watchman for the watchlist with the handler to copy every changed file to all its destination
   const client = new watchman.Client({
@@ -105,7 +114,7 @@ export const handler = (argv: Arguments): void => {
         });
       });
 
-      createSubscriptionEventEmitter(client, watchlist);
+      createSubscriptionEventEmitter(client, watchlist, debug);
     }
   );
 
@@ -192,7 +201,8 @@ const createWatchmanConfig = (watch: Watch) => {
 };
 const createSubscriptionEventEmitter = (
   client: watchman.Client,
-  watchlist: Watch[]
+  watchlist: Watch[],
+  debug: any
 ) => {
   client.on("subscription", function (resp) {
     //console.log("subscription...", resp);
@@ -268,14 +278,17 @@ const createSubscriptionEventEmitter = (
             });
           }
 
-          // console.log({
-          //   from,
-          //   fromExists: fs.existsSync(from),
-          //   to,
-          //   toExists: fs.existsSync(to),
-          // });
-
-          fs.copyFileSync(from, to);
+          try {
+            fs.copyFileSync(from, to, fs.constants.COPYFILE_FICLONE);
+          } catch (error) {
+            console.log(colors.red("copy file error"), {
+              from,
+              fromExists: fs.existsSync(from),
+              to,
+              toExists: fs.existsSync(to),
+              error,
+            });
+          }
           //console.log({ from, to });
         });
       });
