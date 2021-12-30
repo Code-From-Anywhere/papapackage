@@ -77,7 +77,7 @@ export const findPackageDependencyPair =
   };
 
 export const getLinkingStrategy = (type?: ProjectType): LinkingStrategy => {
-  const linkTypes: ProjectType[] = ["next", "react"];
+  const linkTypes: ProjectType[] = ["next"]; //react is used in a lot of packages as well that don't have a watcher but just watch node_modules
 
   return type && linkTypes.includes(type) ? "link" : "copy";
 };
