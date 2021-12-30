@@ -228,11 +228,11 @@ const createSubscriptionEventEmitter = (
       );
 
       if (filteredFiles.length === 0) {
-        console.log(
-          colors.red(
-            `${resp.files.length} has 0 source-files (had ${watch.dests.length} destinations).`
-          )
-        );
+        // console.log(
+        //   colors.red(
+        //     `${fullPath}: ${resp.files.length} watched files but 0 source-files (had ${watch.dests.length} destinations).`
+        //   )
+        // );
         return;
       }
 
