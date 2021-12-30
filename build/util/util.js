@@ -76,6 +76,7 @@ const getRelevantWatchlistInfo = (object) => {
             currentPackageInfo: (0, exports.getRelevantPackageInfo)(path_1.default.join(dest, "node_modules", name, "package.json")),
         };
     });
+    //
     return {
         src: (0, exports.getFolder)(object.src.path),
         dests: destPackages
@@ -91,7 +92,7 @@ const getRelevantWatchlistInfo = (object) => {
             dependencyName: name,
         })),
     };
-}; //kjlkjkljkl
+};
 exports.getRelevantWatchlistInfo = getRelevantWatchlistInfo;
 const getPackages = (args) => {
     //step 1: get the folder to run this command from

@@ -95,7 +95,7 @@ export const getRelevantWatchlistInfo = (
       ),
     };
   });
-
+  //
   return {
     src: getFolder(object.src.path),
     dests: destPackages
@@ -111,7 +111,7 @@ export const getRelevantWatchlistInfo = (
         dependencyName: name,
       })),
   };
-}; //kjlkjkljkl
+};
 
 export const getPackages = (args: (string | number)[]) => {
   //step 1: get the folder to run this command from
