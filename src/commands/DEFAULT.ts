@@ -29,9 +29,8 @@ export const handler = (argv: Arguments): void => {
       process.exit();
     } else if (key.name === "l") {
       const { watchlist, linklist } = calculateTodo(argv);
-      //logWatchlist(watchlist);
+      logWatchlist(watchlist);
       logLinklist(linklist);
-      linkLinklist(linklist, "yarn");
     } else if (key.name === "f") {
       const args = argv._;
       const { files, packages } = getPackages(args);
@@ -227,6 +226,10 @@ const createSubscriptionEventEmitter = (
       const filteredFiles = resp.files.filter(
         (f: FileType) => !f.name.includes("node_modules/")
       );
+
+      if (filteredFiles.length === 0) {
+        return;
+      }
 
       console.log(
         colors.green("Event"),
