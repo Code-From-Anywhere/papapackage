@@ -176,7 +176,7 @@ const getRelevantLinkingInfo = (packagePair) => {
         ? {
             src: (0, exports.getFolder)(packagePair.src.path),
             dests: packagePair.dests
-                .filter((dest) => (0, exports.getLinkingStrategy)(dest.type) === "link")
+                .filter((dest) => (0, exports.getLinkingStrategy)(packagePair.src.type) === "link")
                 .map((dest) => ({
                 destinationFolder: (0, exports.getFolder)(dest.path),
                 dependencyName,

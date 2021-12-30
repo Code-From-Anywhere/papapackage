@@ -220,7 +220,7 @@ export const getRelevantLinkingInfo = (
     ? {
         src: getFolder(packagePair.src.path),
         dests: packagePair.dests
-          .filter((dest) => getLinkingStrategy(dest.type) === "link")
+          .filter((dest) => getLinkingStrategy(packagePair.src.type) === "link")
           .map((dest) => ({
             destinationFolder: getFolder(dest.path),
             dependencyName,
