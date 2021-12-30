@@ -23,9 +23,8 @@ const handler = (argv) => {
         }
         else if (key.name === "l") {
             const { watchlist, linklist } = (0, util_1.calculateTodo)(argv);
-            //logWatchlist(watchlist);
+            (0, util_1.logWatchlist)(watchlist);
             (0, util_1.logLinklist)(linklist);
-            (0, util_1.linkLinklist)(linklist, "yarn");
         }
         else if (key.name === "f") {
             const args = argv._;
@@ -155,6 +154,9 @@ const createSubscriptionEventEmitter = (client, watchlist, debug) => {
                 console.log(colors.red("invalid rootpath"), rootPath, resp.root);
             }
             const filteredFiles = resp.files.filter((f) => !f.name.includes("node_modules/"));
+            if (filteredFiles.length === 0) {
+                return;
+            }
             console.log(colors.green("Event"), `Copying ${filteredFiles.length} file(s) to ${watch.dests.length} destination(s)`, { fullPath }, colors.yellow("names: "), filteredFiles.map((f) => f.name), colors.blue("destinations: "), watch.dests.map((d) => path_1.default.join(d.destinationFolder, "node_modules", d.dependencyName)));
             filteredFiles.forEach(function (file) {
                 // convert Int64 instance to javascript integer
