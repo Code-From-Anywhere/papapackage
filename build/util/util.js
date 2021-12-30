@@ -8,6 +8,7 @@ const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
 const child_process_1 = require("child_process");
+var colors = require("colors");
 const hasDependency = (packageJson, dependency) => {
     return (0, exports.getAllPackageJsonDependencies)(packageJson).includes(dependency);
 };
@@ -220,6 +221,7 @@ const linkLinklist = (linklist, cli) => {
 };
 exports.linkLinklist = linkLinklist;
 const logWatchlist = (watchlist) => {
+    console.log(colors.green("Watch list:"));
     console.dir(watchlist.map((w) => ({
         src: w.src,
         dests: w.dests.map((dest) => dest.destinationFolder),
@@ -227,6 +229,7 @@ const logWatchlist = (watchlist) => {
 };
 exports.logWatchlist = logWatchlist;
 const logLinklist = (linklist) => {
+    console.log(colors.green("Link list:"));
     console.dir(linklist.map((l) => ({
         src: l.src,
         dests: l.dests,

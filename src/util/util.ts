@@ -14,6 +14,7 @@ import type {
   LinkingCli,
 } from "./types";
 import { exec, execSync } from "child_process";
+var colors = require("colors");
 
 export const hasDependency = (packageJson: Package, dependency: string) => {
   return getAllPackageJsonDependencies(packageJson).includes(dependency);
@@ -273,6 +274,8 @@ export const linkLinklist = (linklist: Link[], cli: LinkingCli): void => {
 };
 
 export const logWatchlist = (watchlist: Watch[]) => {
+  console.log(colors.green("Watch list:"));
+
   console.dir(
     watchlist.map((w) => ({
       src: w.src,
@@ -283,6 +286,7 @@ export const logWatchlist = (watchlist: Watch[]) => {
 };
 
 export const logLinklist = (linklist: Link[]) => {
+  console.log(colors.green("Link list:"));
   console.dir(
     linklist.map((l) => ({
       src: l.src,
