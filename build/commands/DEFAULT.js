@@ -31,7 +31,7 @@ const handler = (argv) => {
             const { files, packages } = (0, util_1.getPackages)(args);
             console.log({
                 files,
-                packages: packages.map(({ name, path }) => ({ name, path })),
+                packages,
             });
         }
         else {
@@ -155,6 +155,7 @@ const createSubscriptionEventEmitter = (client, watchlist, debug) => {
             }
             const filteredFiles = resp.files.filter((f) => !f.name.includes("node_modules/"));
             if (filteredFiles.length === 0) {
+                console.log(colors.red(`${resp.files.length} has 0 source-files (had ${watch.dests.length} destinations).`));
                 return;
             }
             console.log(colors.green("Event"), `Copying ${filteredFiles.length} file(s) to ${watch.dests.length} destination(s)`, { fullPath }, colors.yellow("names: "), filteredFiles.map((f) => f.name), colors.blue("destinations: "), watch.dests.map((d) => path_1.default.join(d.destinationFolder, "node_modules", d.dependencyName)));

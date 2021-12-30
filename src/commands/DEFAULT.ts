@@ -36,7 +36,7 @@ export const handler = (argv: Arguments): void => {
       const { files, packages } = getPackages(args);
       console.log({
         files,
-        packages: packages.map(({ name, path }) => ({ name, path })),
+        packages,
       });
     } else {
       console.log(
@@ -228,6 +228,11 @@ const createSubscriptionEventEmitter = (
       );
 
       if (filteredFiles.length === 0) {
+        console.log(
+          colors.red(
+            `${resp.files.length} has 0 source-files (had ${watch.dests.length} destinations).`
+          )
+        );
         return;
       }
 
