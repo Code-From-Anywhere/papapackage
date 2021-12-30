@@ -3,14 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getFolder = exports.getDependenciesList = exports.unique = exports.chooseFolder = exports.keepHighestVersion = exports.isHigherVersion = exports.getRelevantPackageInfo = exports.logLinklist = exports.logWatchlist = exports.linkLinklist = exports.calculateTodo = exports.notEmpty = exports.getRelevantLinkingInfo = exports.getSrcDestsPairs = exports.getPackages = exports.getRelevantWatchlistInfo = exports.getLinkingStrategy = exports.findPackageDependencyPair = exports.searchRecursiveSync = exports.getProjectType = exports.hasDependency = void 0;
+exports.getFolder = exports.getDependenciesList = exports.getAllPackageJsonDependencies = exports.unique = exports.chooseFolder = exports.keepHighestVersion = exports.isHigherVersion = exports.getRelevantPackageInfo = exports.logLinklist = exports.logWatchlist = exports.linkLinklist = exports.calculateTodo = exports.notEmpty = exports.getRelevantLinkingInfo = exports.getSrcDestsPairs = exports.getPackages = exports.getRelevantWatchlistInfo = exports.getLinkingStrategy = exports.findPackageDependencyPair = exports.searchRecursiveSync = exports.getProjectType = exports.hasDependency = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const constants_1 = require("./constants");
 const child_process_1 = require("child_process");
 const hasDependency = (packageJson, dependency) => {
-    return (packageJson.dependencies &&
-        Object.keys(packageJson.dependencies).includes(dependency));
+    return (0, exports.getAllPackageJsonDependencies)(packageJson).includes(dependency);
 };
 exports.hasDependency = hasDependency;
 const getProjectType = (packageJson) => {
@@ -58,7 +57,7 @@ exports.searchRecursiveSync = searchRecursiveSync;
 const findPackageDependencyPair = (dependencyPackagesNames) => (p) => {
     return {
         package: p,
-        dependencies: unique((0, exports.getDependenciesList)([], p), String).filter((dependency) => dependencyPackagesNames.includes(dependency)),
+        dependencies: unique((0, exports.getAllPackageJsonDependencies)(p), String).filter((dependency) => dependencyPackagesNames.includes(dependency)),
     };
 };
 exports.findPackageDependencyPair = findPackageDependencyPair;
@@ -318,7 +317,7 @@ function unique(a, getId) {
     return out;
 }
 exports.unique = unique;
-const getDependenciesList = (concatDependencies, p) => {
+const getAllPackageJsonDependencies = (p) => {
     const dependencies = p.dependencies ? Object.keys(p.dependencies) : [];
     const devDependencies = p.devDependencies
         ? Object.keys(p.devDependencies)
@@ -326,12 +325,11 @@ const getDependenciesList = (concatDependencies, p) => {
     const peerDependencies = p.peerDependencies
         ? Object.keys(p.peerDependencies)
         : [];
-    return [
-        ...concatDependencies,
-        ...dependencies,
-        ...devDependencies,
-        ...peerDependencies,
-    ];
+    return [...dependencies, ...devDependencies, ...peerDependencies];
+};
+exports.getAllPackageJsonDependencies = getAllPackageJsonDependencies;
+const getDependenciesList = (concatDependencies, p) => {
+    return [...concatDependencies, ...(0, exports.getAllPackageJsonDependencies)(p)];
 };
 exports.getDependenciesList = getDependenciesList;
 const getFolder = (path) => {

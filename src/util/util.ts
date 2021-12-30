@@ -16,10 +16,7 @@ import type {
 import { exec, execSync } from "child_process";
 
 export const hasDependency = (packageJson: Package, dependency: string) => {
-  return (
-    packageJson.dependencies &&
-    Object.keys(packageJson.dependencies).includes(dependency)
-  );
+  return getAllPackageJsonDependencies(packageJson).includes(dependency);
 };
 
 export const getProjectType = (packageJson: any): ProjectType => {
@@ -72,7 +69,7 @@ export const findPackageDependencyPair =
   (dependencyPackagesNames: (string | undefined)[]) => (p: Package) => {
     return {
       package: p,
-      dependencies: unique(getDependenciesList([], p), String).filter(
+      dependencies: unique(getAllPackageJsonDependencies(p), String).filter(
         (dependency) => dependencyPackagesNames.includes(dependency)
       ),
     };
@@ -386,10 +383,7 @@ export function unique<T>(a: T[], getId: (a: T) => string): T[] {
   return out;
 }
 
-export const getDependenciesList = (
-  concatDependencies: string[],
-  p: Package
-) => {
+export const getAllPackageJsonDependencies = (p: Package): string[] => {
   const dependencies = p.dependencies ? Object.keys(p.dependencies) : [];
   const devDependencies = p.devDependencies
     ? Object.keys(p.devDependencies)
@@ -397,12 +391,15 @@ export const getDependenciesList = (
   const peerDependencies = p.peerDependencies
     ? Object.keys(p.peerDependencies)
     : [];
-  return [
-    ...concatDependencies,
-    ...dependencies,
-    ...devDependencies,
-    ...peerDependencies,
-  ];
+
+  return [...dependencies, ...devDependencies, ...peerDependencies];
+};
+
+export const getDependenciesList = (
+  concatDependencies: string[],
+  p: Package
+): string[] => {
+  return [...concatDependencies, ...getAllPackageJsonDependencies(p)];
 };
 
 export const getFolder = (path: string) => {
