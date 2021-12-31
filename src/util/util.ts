@@ -3,20 +3,22 @@ import path from "path";
 import { Arguments } from "yargs";
 import { IGNORE_DIRS, MATCH_FILE } from "./constants";
 import type {
-  Package,
   WatchmanDest,
   Watch,
   ProjectType,
   LinkingStrategy,
-  Link,
-  SrcDestsPackagePair,
-  Todo,
   LinkingCli,
+  WatchPackageObject,
+  PackageInfo,
+  FileType,
+  SubscriptionResponse,
 } from "./types";
+import watchman from "fb-watchman";
+
 import { exec, execSync } from "child_process";
 var colors = require("colors");
 
-export const hasDependency = (packageJson: Package, dependency: string) => {
+export const hasDependency = (packageJson: PackageInfo, dependency: string) => {
   return getAllPackageJsonDependencies(packageJson).includes(dependency);
 };
 
@@ -67,7 +69,7 @@ export function searchRecursiveSync(
 }
 
 export const findPackageDependencyPair =
-  (dependencyPackagesNames: (string | undefined)[]) => (p: Package) => {
+  (dependencyPackagesNames: (string | undefined)[]) => (p: PackageInfo) => {
     return {
       package: p,
       dependencies: unique(getAllPackageJsonDependencies(p), String).filter(
@@ -82,35 +84,18 @@ export const getLinkingStrategy = (type?: ProjectType): LinkingStrategy => {
   return type && linkTypes.includes(type) ? "link" : "copy";
 };
 
-export const getRelevantWatchlistInfo = (
-  object: SrcDestsPackagePair
-): Watch => {
-  const dests = object.dests.map((dest) => getFolder(dest.path));
-  const name = object.src.name!;
-  const version = object.src.version;
-  const destPackages = dests.map((dest) => {
-    return {
-      dest,
-      currentPackageInfo: getRelevantPackageInfo(
-        path.join(dest, "node_modules", name, "package.json")
-      ),
-    };
-  });
-  //
+export const getRelevantWatchlistInfo = (object: WatchPackageObject): Watch => {
   return {
-    src: getFolder(object.src.path),
-    dests: destPackages
-      .filter((x) => getLinkingStrategy(x.currentPackageInfo?.type) === "copy")
-      .map((p) => ({
-        currentPackageJsonPath: p.currentPackageInfo?.path,
-        currentVersion: p.currentPackageInfo?.version,
-        destinationFolder: p.dest,
-      }))
-      //.filter(onlyCopyIfCurrentVersionIsLower(version)) //TODO: This creates a bug!
-      .map((watchmanDest) => ({
-        destinationFolder: watchmanDest.destinationFolder,
-        dependencyName: name,
-      })),
+    src: {
+      folderPath: getFolder(object.src.path),
+      dependencyName: object.src.name!,
+      packageInfo: object.src,
+    },
+    dests: object.dests.map((packageInfo) => ({
+      folderPath: getFolder(packageInfo.path),
+      linkingStrategy: getLinkingStrategy(packageInfo.type),
+      packageInfo,
+    })),
   };
 };
 
@@ -122,9 +107,7 @@ export const getPackages = (args: (string | number)[]) => {
   const files = searchRecursiveSync(folder, IGNORE_DIRS, MATCH_FILE);
 
   //step 3: now that we got all package.json's, fetch their data
-  const packages = files
-    .map(getRelevantPackageInfo)
-    .filter(Boolean) as Package[];
+  const packages = files.map(getRelevantPackageInfo).filter(notEmpty);
 
   return { files, packages };
 };
@@ -180,7 +163,7 @@ export const getSrcDestsPairs = (argv: Arguments) => {
   ).map((sd) => sd.src);
 
   //step 8: find all dests for one src, for all unique src's
-  const srcDestsPairs: SrcDestsPackagePair[] = uniqueSources.map((src) => {
+  const srcDestsPairs: WatchPackageObject[] = uniqueSources.map((src) => {
     const dests = srcDestPairs
       .filter((srcDest) => srcDest.src.name === src.name)
       .map((srcDest) => srcDest.dest);
@@ -212,39 +195,18 @@ export const getSrcDestsPairs = (argv: Arguments) => {
   return srcDestsPairs;
 };
 
-export const getRelevantLinkingInfo = (
-  packagePair: SrcDestsPackagePair
-): Link | null => {
-  const dependencyName = packagePair.src.name;
-  return dependencyName
-    ? {
-        src: getFolder(packagePair.src.path),
-        dests: packagePair.dests
-          .filter((dest) => getLinkingStrategy(packagePair.src.type) === "link")
-          .map((dest) => ({
-            destinationFolder: getFolder(dest.path),
-            dependencyName,
-          })),
-      }
-    : null;
-};
-
 export function notEmpty<TValue>(
   value: TValue | null | undefined
 ): value is TValue {
   return value !== null && value !== undefined;
 }
 
-export const calculateTodo = (argv: Arguments): Todo => {
+export const calculateWatchlist = (argv: Arguments): Watch[] => {
   const srcDestsPairs = getSrcDestsPairs(argv);
 
   //step 9: we just need the folders
   const watchlist: Watch[] = srcDestsPairs
     .map(getRelevantWatchlistInfo)
-    .filter((x) => x.dests.length !== 0);
-  const linklist: Link[] = srcDestsPairs
-    .map(getRelevantLinkingInfo)
-    .filter(notEmpty)
     .filter((x) => x.dests.length !== 0);
 
   //TODO: add step 10-12 later, as it's probably not needed
@@ -252,18 +214,21 @@ export const calculateTodo = (argv: Arguments): Todo => {
   //step 11: remove current dest/node_modules/dependency folder
   //step 12: copy src folder to dest/node_modules/dependency
 
-  return { watchlist, linklist };
+  return watchlist;
 };
 
-export const linkLinklist = (linklist: Link[], cli: LinkingCli): void => {
-  const commands = linklist.reduce((commands, link) => {
+export const linkWatchlist = (watchlist: Watch[], cli: LinkingCli): void => {
+  const commands = watchlist.reduce((commands, watch) => {
     return [
       ...commands,
-      `cd ${link.src} && ${cli} link`,
-      ...link.dests.map(
-        (dest) =>
-          `cd ${dest.destinationFolder} && ${cli} link ${dest.dependencyName}`
-      ),
+      `cd ${watch.src.folderPath} && ${cli} link`,
+      ...watch.dests
+        .map((dest) =>
+          dest.linkingStrategy === "link"
+            ? `cd ${dest.folderPath} && ${cli} link ${watch.src.dependencyName}`
+            : null
+        )
+        .filter(notEmpty),
     ];
   }, [] as string[]);
 
@@ -275,25 +240,7 @@ export const linkLinklist = (linklist: Link[], cli: LinkingCli): void => {
 
 export const logWatchlist = (watchlist: Watch[]) => {
   console.log(colors.green("Watch list:"));
-
-  console.dir(
-    watchlist.map((w) => ({
-      src: w.src,
-      dests: w.dests.map((dest) => dest.destinationFolder),
-    })),
-    { depth: 10 }
-  );
-};
-
-export const logLinklist = (linklist: Link[]) => {
-  console.log(colors.green("Link list:"));
-  console.dir(
-    linklist.map((l) => ({
-      src: l.src,
-      dests: l.dests,
-    })),
-    { depth: 10 }
-  );
+  console.dir(watchlist, { depth: 10 });
 };
 
 const onlyCopyIfCurrentVersionIsLower =
@@ -303,7 +250,7 @@ const onlyCopyIfCurrentVersionIsLower =
       : true;
   };
 
-export const getRelevantPackageInfo = (path: string): Package | null => {
+export const getRelevantPackageInfo = (path: string): PackageInfo | null => {
   let fileBuffer;
   try {
     fileBuffer = fs.readFileSync(path);
@@ -345,7 +292,10 @@ export const isHigherVersion = (x: string, y: string) => {
   return true;
 };
 
-export const keepHighestVersion = (packages: Package[], current: Package) => {
+export const keepHighestVersion = (
+  packages: PackageInfo[],
+  current: PackageInfo
+) => {
   const previous = packages.find((p) => p.name === current.name);
 
   return previous
@@ -353,6 +303,238 @@ export const keepHighestVersion = (packages: Package[], current: Package) => {
       ? packages //discard current because previous is higher
       : packages.filter((p) => p.name === previous.name).concat([current]) //discard previous and keep current because current is higher
     : packages.concat([current]); //there is no previous so just add the current
+};
+
+export const watchWatch = (client: watchman.Client) => (watch: Watch) => {
+  createWatchmanConfig(watch);
+
+  client.command(
+    ["watch-project", watch.src.folderPath],
+    function (error, resp) {
+      if (error) {
+        console.error(colors.red("Error initiating watch:"), error);
+        return;
+      }
+
+      // It is considered to be best practice to show any 'warning' or
+      // 'error' information to the user, as it may suggest steps
+      // for remediation
+      if ("warning" in resp) {
+        console.log(colors.yellow("Warning initiating watch: "), resp.warning);
+      }
+
+      // `watch-project` can consolidate the watch for your
+      // dir_of_interest with another watch at a higher level in the
+      // tree, so it is very important to record the `relative_path`
+      // returned in resp
+
+      console.log(
+        colors.green("New watch:"),
+        "watch established on ",
+        resp.relative_path
+          ? path.join(resp.watch, resp.relative_path)
+          : resp.watch
+      );
+
+      makeSubscription(client, resp.watch, resp.relative_path);
+    }
+  );
+};
+
+// `watch` is obtained from `resp.watch` in the `watch-project` response.
+// `relative_path` is obtained from `resp.relative_path` in the
+// `watch-project` response.
+export function makeSubscription(
+  client: watchman.Client,
+  watchBaseFolder: string,
+  watchRelativePath: string
+) {
+  const sub = {
+    // Match any `.js` file in the dir_of_interest
+    expression: ["allof", ["match", "*.*"]],
+    // Which fields we're interested in
+    fields: ["name", "size", "mtime_ms", "exists", "type"],
+    relative_root: undefined as undefined | string,
+  };
+
+  if (watchRelativePath) {
+    sub.relative_root = watchRelativePath;
+  }
+
+  const subName = `papapackage:${watchBaseFolder}${
+    watchRelativePath ? `:${watchRelativePath}` : ""
+  }`;
+
+  client.command(
+    ["subscribe", watchBaseFolder, subName, sub],
+    function (error, resp) {
+      if (error) {
+        // Probably an error in the subscription criteria
+        console.error(
+          colors.red("Error subscribing"),
+          "Failed to subscribe: ",
+          error
+        );
+        return;
+      }
+      console.log(
+        colors.green("New subscribtion"),
+        "subscription " + resp.subscribe + " established"
+      );
+    }
+  );
+
+  return subName;
+
+  // Subscription results are emitted via the subscription event.
+  // Note that this emits for all subscriptions.  If you have
+  // subscriptions with different `fields` you will need to check
+  // the subscription name and handle the differing data accordingly.
+  // `resp`  looks like this in practice:
+  //
+  // { root: '/private/tmp/foo',
+  //   subscription: 'mysubscription',
+  //   files: [ { name: 'node_modules/fb-watchman/index.js',
+  //       size: 4768,
+  //       exists: true,
+  //       type: 'f' } ] }
+}
+
+export const createSubscriptionEventEmitter = (
+  client: watchman.Client,
+  watchlist: Watch[],
+  debug: any
+) => {
+  client.on("subscription", function (resp: SubscriptionResponse) {
+    //console.log("subscription...", resp);
+    const [appName, rootPath, relativePath] = resp.subscription.split(":");
+
+    if (!rootPath) {
+      console.log("No rootpath found", resp.subscription);
+      return;
+    }
+
+    const fullPath = relativePath
+      ? path.join(rootPath, relativePath)
+      : rootPath;
+
+    const watch = watchlist.find((w) => w.src.folderPath === fullPath);
+
+    if (watch) {
+      const filteredDests = watch.dests.filter(
+        (dest) => dest.linkingStrategy === "copy"
+      );
+
+      if (filteredDests.length === 0) {
+        // no destinations that need a copy
+        return;
+      }
+
+      if (rootPath !== resp.root) {
+        console.log(colors.red("invalid rootpath"), rootPath, resp.root);
+      }
+
+      const filteredFiles = resp.files.filter(
+        (f) => !f.name.includes("node_modules/")
+      );
+
+      if (filteredFiles.length === 0) {
+        //no files that need to be copied
+        return;
+      }
+
+      console.log(
+        colors.green("Event"),
+        `Copying ${filteredFiles.length} file(s) to ${filteredDests.length} destination(s)`,
+        { fullPath },
+        colors.yellow("names: "),
+        filteredFiles.map((f) => f.name),
+        colors.blue("destinations: "),
+        filteredDests.map((d) =>
+          path.join(d.folderPath, "node_modules", watch.src.dependencyName)
+        )
+      );
+
+      filteredFiles.forEach((file) => {
+        // convert Int64 instance to javascript integer
+        const mtime_ms = +file.mtime_ms;
+
+        // console.log(
+        //   "file changed: " + resp.root + "/" + file.name,
+        //   mtime_ms,
+        //   "should copy to",
+        //   dests
+        // );
+
+        filteredDests.map((dest) => {
+          const from = path.join(fullPath, file.name);
+          const to = path.join(
+            dest.folderPath,
+            "node_modules",
+            watch.src.dependencyName,
+            file.name
+          );
+
+          // if (resp.relative_path) {
+          //   console.log({
+          //     relative: resp.relative_path,
+          //     rootWithRelative,
+          //     from,
+          //     to,
+          //   });
+          // }
+
+          const folders = to.split("/");
+          folders.pop();
+          const folder = folders.join("/");
+
+          if (!fs.existsSync(folder)) {
+            fs.mkdirSync(folder, {
+              recursive: true,
+            });
+          }
+
+          try {
+            fs.copyFileSync(from, to, fs.constants.COPYFILE_FICLONE);
+          } catch (error) {
+            console.log(colors.red("copy file error"), {
+              from,
+              fromExists: fs.existsSync(from),
+              to,
+              toExists: fs.existsSync(to),
+              error,
+            });
+          }
+          //console.log({ from, to });
+        });
+      });
+    } else {
+      console.log("Couldnt find watch for ", resp.subscription);
+    }
+  });
+};
+
+export const createWatchmanConfig = (watch: Watch) => {
+  const mustIgnore = ["node_modules", ".git"];
+  const watchmanConfigPath = path.join(watch.src.folderPath, ".watchmanconfig");
+
+  try {
+    const buffer = fs.readFileSync(watchmanConfigPath);
+
+    //@ts-ignore
+    const json = JSON.parse(buffer);
+  } catch (e) {
+    // create file
+    console.log(
+      colors.green("Created config: "),
+      "created watchmanconfig file to ignore node_modules and .git"
+    );
+
+    fs.writeFileSync(
+      watchmanConfigPath,
+      JSON.stringify({ ignore_dirs: mustIgnore })
+    );
+  }
 };
 
 export const chooseFolder = (args: (string | number)[]) => {
@@ -387,7 +569,7 @@ export function unique<T>(a: T[], getId: (a: T) => string): T[] {
   return out;
 }
 
-export const getAllPackageJsonDependencies = (p: Package): string[] => {
+export const getAllPackageJsonDependencies = (p: PackageInfo): string[] => {
   const dependencies = p.dependencies ? Object.keys(p.dependencies) : [];
   const devDependencies = p.devDependencies
     ? Object.keys(p.devDependencies)
@@ -401,7 +583,7 @@ export const getAllPackageJsonDependencies = (p: Package): string[] => {
 
 export const getDependenciesList = (
   concatDependencies: string[],
-  p: Package
+  p: PackageInfo
 ): string[] => {
   return [...concatDependencies, ...getAllPackageJsonDependencies(p)];
 };

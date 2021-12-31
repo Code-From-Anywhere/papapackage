@@ -2,25 +2,26 @@ export type HomogeneousObject<T> = {
   [key: string]: T;
 };
 
-export type PackageObject = HomogeneousObject<string>;
+export type PackageInfoObject = HomogeneousObject<string>;
 
-export type Package = {
+export type PackageInfo = {
   path: string;
   name?: string;
   type: ProjectType;
   version?: string;
   private?: boolean;
   author?: string;
-  dependencies?: PackageObject;
-  devDependencies?: PackageObject;
-  peerDependencies?: PackageObject;
+  dependencies?: PackageInfoObject;
+  devDependencies?: PackageInfoObject;
+  peerDependencies?: PackageInfoObject;
 };
 
 export type LinkingStrategy = "copy" | "link";
 
-export type SrcDestsPackagePair = {
-  src: Package;
-  dests: Package[];
+export type SubscriptionResponse = {
+  subscription: FolderPathString;
+  root: FolderPathString;
+  files: FileType[];
 };
 
 export type ProjectType =
@@ -38,25 +39,29 @@ export type WatchmanDest = {
   destinationFolder: string;
 };
 
-export type Todo = {
-  watchlist: Watch[];
-  linklist: Link[];
+export type WatchDestination = {
+  folderPath: FolderPathString;
+  linkingStrategy: LinkingStrategy;
+  packageInfo: PackageInfo;
+};
+
+export type WatchPackageObject = {
+  src: PackageInfo;
+  dests: PackageInfo[];
+};
+
+export type WatchSource = {
+  packageInfo: PackageInfo;
+  folderPath: FolderPathString;
+  dependencyName: string;
 };
 
 export type Watch = {
-  src: FolderPathString;
-  dests: {
-    destinationFolder: FolderPathString;
-    dependencyName: string;
-  }[];
+  src: WatchSource;
+  dests: WatchDestination[];
 };
 
 export type FolderPathString = string;
-
-export type Link = {
-  src: FolderPathString;
-  dests: { destinationFolder: FolderPathString; dependencyName: string }[];
-};
 
 export type FileType = {
   // ["name", "size", "mtime_ms", "exists", "type"]
