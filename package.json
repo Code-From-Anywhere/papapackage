@@ -6,7 +6,7 @@
   "main": "./dist/tsc/cli.js",
   "types": "./dist/tsc/cli.d.ts",
   "bin": {
-    "papapackage": "./dist/esbuild/cli.js"
+    "papapackage": "./dist/tsc/cli.js"
   },
   "repository": {
     "type": "git",
