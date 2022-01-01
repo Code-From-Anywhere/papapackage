@@ -4,6 +4,10 @@ export type HomogeneousObject<T> = {
 
 export type PackageInfoObject = HomogeneousObject<string>;
 
+export type Command = {
+  command: string;
+  what: string;
+};
 export type PackageInfo = {
   path: string;
   name?: string;
