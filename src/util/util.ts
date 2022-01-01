@@ -130,13 +130,15 @@ export const getPackages = (args: (string | number)[]) => {
   return { files, packages };
 };
 
-export const getSrcDestsPairs = (argv: Arguments) => {
+export const getSrcDestsPairs = (argv: Arguments, status: Ora) => {
   const command = argv.$0;
   const args = argv._;
   const debug = args[1];
 
   //step 1-3
   const { files, packages } = getPackages(args);
+
+  status.render();
 
   //step 4: get all dependencies of all packages
   const depList = packages.reduce(getDependenciesList, []);
@@ -153,11 +155,15 @@ export const getSrcDestsPairs = (argv: Arguments) => {
     console.log(dependencyPackages.map((p) => p.name));
   }
 
+  status.render();
+
   //step 6: find dependencies for all packages
   const dependencyPackagesNames = dependencyPackages.map((p) => p.name);
   const dependentPackages = packages
     .map(findPackageDependencyPair(dependencyPackagesNames))
     .filter((res) => res.dependencies.length > 0);
+
+  status.render();
 
   //step 7: find srcDestPairs
   const srcDestPairs = dependentPackages
@@ -174,10 +180,14 @@ export const getSrcDestsPairs = (argv: Arguments) => {
       return [...previous, ...current];
     }, []);
 
+  status.render();
+
   const uniqueSources = unique(
     srcDestPairs,
     (srcDestPair) => srcDestPair.src.path
   ).map((sd) => sd.src);
+
+  status.render();
 
   //step 8: find all dests for one src, for all unique src's
   const srcDestsPairs: WatchPackageObject[] = uniqueSources.map((src) => {
@@ -190,6 +200,8 @@ export const getSrcDestsPairs = (argv: Arguments) => {
       dests,
     };
   });
+
+  status.render();
 
   if (debug) {
     console.log("SRCDEST & SRCDESTS");
@@ -223,9 +235,11 @@ export const calculateWatchlist = (argv: Arguments): Watch[] => {
     text: "Searching...",
     discardStdin: false,
     hideCursor: false,
-  }).start();
+  })
+    .start()
+    .render();
 
-  const srcDestsPairs = getSrcDestsPairs(argv);
+  const srcDestsPairs = getSrcDestsPairs(argv, status);
 
   //step 9: we just need the folders
   const watchlist: Watch[] = srcDestsPairs
@@ -328,13 +342,18 @@ export const linkWatchlist = (
   }, [] as Command[]);
 
   commands.forEach((command) => {
-    execSync(command.command, { stdio: "ignore" });
+    try {
+      const result = execSync(command.command, { stdio: "ignore" });
 
-    status.render().start(`Linking ${command.what}`);
-
-    if (debug) {
-      //  console.log({ result: result.toString("utf-8") });
+      if (debug) {
+        console.log({ result: result.toString("utf-8") });
+      }
+    } catch (e) {
+      if (debug) {
+        console.log(colors.red("error running command"), e);
+      }
     }
+    status.render().start(`Linking ${command.what}`);
   });
 
   const numLinkedDestinations = commands.length - watchlist.length;
