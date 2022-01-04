@@ -346,7 +346,10 @@ export const linkWatchlist = (
       const result = execSync(command.command, { stdio: "ignore" });
 
       if (debug) {
-        console.log({ result: result.toString("utf-8") });
+        console.log({
+          command: command.command,
+          result: result?.toString("utf-8"),
+        });
       }
     } catch (e) {
       if (debug) {
