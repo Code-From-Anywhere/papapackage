@@ -325,7 +325,7 @@ export const linkWatchlist = (
     return [
       ...commands,
       {
-        command: `cd ${watch.src.folderPath} && ${cli} link`,
+        command: `rm -rf ~/.config/yarn/link/${watch.src.dependencyName} && cd ${watch.src.folderPath} && ${cli} link`,
         what: watch.src.dependencyName,
       },
       ...watch.dests
