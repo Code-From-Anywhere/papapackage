@@ -1,6 +1,6 @@
 {
   "name": "papapackage",
-  "version": "1.0.31",
+  "version": "1.0.32",
   "type": "module",
   "description": "",
   "main": "./dist/tsc/cli.js",
