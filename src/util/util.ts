@@ -343,7 +343,10 @@ export const linkWatchlist = (
 
   commands.forEach((command) => {
     try {
-      const result = execSync(command.command, { stdio: "ignore" });
+      const result = execSync(
+        command.command,
+        debug ? undefined : { stdio: "ignore" }
+      );
 
       if (debug) {
         console.log({
